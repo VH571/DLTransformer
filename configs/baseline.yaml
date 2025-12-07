@@ -1,0 +1,35 @@
+
+
+
+data:
+  dataset_name: "Maxwe11y/gaslighting"   
+  max_length: 50                      
+  vocab_size: 10000                  
+
+model:
+  embedding_dim: 128     
+  num_heads: 4
+  num_layers: 2
+  dim_feedforward: 512
+  dropout: 0.1
+
+training:
+  batch_size: 32
+  num_epochs: 15
+  learning_rate: 0.0001
+  weight_decay: 0.01
+  gradient_clip: 1.0
+
+  patience: 5
+
+  save_dir: "checkpoints"
+  log_dir: "logs"
+
+evaluation:
+  primary_metric: "f1_macro"
+  secondary_metrics: ["accuracy", "f1_weighted"]
+
+ 
+seed: 42
+
+device: "cuda"
