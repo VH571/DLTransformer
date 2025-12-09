@@ -13,10 +13,10 @@ from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
 
 from models.transformer import TransformerGaslightingDetector
+from models.hierarchical import HierarchicalGaslightingDetector
 from utils.vocab import Vocabulary
-from utils.dataset import GaslightingDataset
+from utils.dataset import GaslightingDataset, ContextWindowDataset
 from utils.metrics import compute_metrics
-
 
 def set_seed(seed):
     random.seed(seed)
@@ -106,14 +106,30 @@ def main(args):
     vocab.build_from_dataset(train_raw)
     vocab_path = os.path.join(save_dir, "vocab.pkl")
     vocab.save(vocab_path)
-
-    # Wrap datasets
-    train_dataset = GaslightingDataset(
-        train_raw, vocab, max_length=config["data"]["max_length"]
-    )
-    val_dataset = GaslightingDataset(
-        val_raw, vocab, max_length=config["data"]["max_length"]
-    )
+    
+    # Model type
+    model_type = config["model"].get("type", "baseline")
+    
+    # Wrap datasets based on type of model
+    if model_type == "hierarchical":
+        context_size = config["data"].get("context_size", 5)
+        train_dataset = ContextWindowDataset(
+            train_raw, vocab,
+            max_length=config["data"]["max_length"],
+            context_size=context_size,
+        )
+        val_dataset = ContextWindowDataset(
+            val_raw, vocab,
+            max_length=config["data"]["max_length"],
+            context_size=context_size,
+        )
+    else:
+        train_dataset = GaslightingDataset(
+            train_raw, vocab, max_length=config["data"]["max_length"]
+        )
+        val_dataset = GaslightingDataset(
+            val_raw, vocab, max_length=config["data"]["max_length"]
+        )
 
     train_loader = DataLoader(
         train_dataset,
@@ -127,24 +143,54 @@ def main(args):
         shuffle=False,
         num_workers=0,
     )
-
     # Model
     num_classes = len(train_dataset.label2idx)
-    model = TransformerGaslightingDetector(
-        vocab_size=len(vocab),
-        embedding_dim=config["model"]["embedding_dim"],
-        num_heads=config["model"]["num_heads"],
-        num_layers=config["model"]["num_layers"],
-        dim_feedforward=config["model"]["dim_feedforward"],
-        num_classes=num_classes,
-        dropout=config["model"]["dropout"],
-        max_length=config["data"]["max_length"],
-    ).to(device)
+    if model_type == "hierarchical":
+        max_utts = config["data"].get("context_size", 5) + 1
+        model = HierarchicalGaslightingDetector(
+            vocab_size=len(vocab),
+            embedding_dim=config["model"]["embedding_dim"],
+            num_heads=config["model"]["num_heads"],
+            num_utterance_layers=config["model"].get("utterance_layers", 1),
+            num_conversation_layers=config["model"].get("conversation_layers", 1),
+            dim_feedforward=config["model"]["dim_feedforward"],
+            num_classes=num_classes,
+            dropout=config["model"]["dropout"],
+            max_length=config["data"]["max_length"],
+            max_utterances=max_utts,
+        ).to(device)
+    else:
+        model = TransformerGaslightingDetector(
+            vocab_size=len(vocab),
+            embedding_dim=config["model"]["embedding_dim"],
+            num_heads=config["model"]["num_heads"],
+            num_layers=config["model"]["num_layers"],
+            dim_feedforward=config["model"]["dim_feedforward"],
+            num_classes=num_classes,
+            dropout=config["model"]["dropout"],
+            max_length=config["data"]["max_length"],
+        ).to(device)
 
     total_params = sum(p.numel() for p in model.parameters())
     print(f"Total parameters: {total_params}")
+    
+    # class-balanced loss 
+    use_class_weights = config["training"].get("use_class_weights", False)
+    class_weights = None
+    if use_class_weights:
+        from collections import Counter
 
-    criterion = nn.CrossEntropyLoss()
+        counts = Counter([item["category"] for item in train_raw])
+        total = sum(counts.values())
+        class_weights_list = []
+        for i in range(num_classes):
+            lab = train_dataset.idx2label[i]
+            c = counts[lab]
+            class_weights_list.append(total / c)
+        class_weights = torch.tensor(class_weights_list, dtype=torch.float, device=device)
+        print(f"Class weights: {class_weights_list}")
+        
+    criterion = nn.CrossEntropyLoss(weight=class_weights)
     optimizer = optim.Adam(
         model.parameters(),
         lr=config["training"]["learning_rate"],

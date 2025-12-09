@@ -7,6 +7,8 @@ from datasets import load_dataset
 from torch.utils.data import DataLoader
 
 from models.transformer import TransformerGaslightingDetector
+from models.hierarchical import HierarchicalGaslightingDetector
+from utils.dataset import GaslightingDataset, ContextWindowDataset
 from utils.vocab import Vocabulary
 from utils.dataset import GaslightingDataset
 from utils.metrics import (
@@ -33,10 +35,20 @@ def evaluate_model(checkpoint_path, split="test"):
     # load vocab
     vocab_path = f"{config['training']['save_dir']}/vocab.pkl"
     vocab = Vocabulary.load(vocab_path)
+    #model type
+    model_type = config["model"].get("type", "baseline")
     # wrap dataset
-    dataset = GaslightingDataset(
-        data_raw, vocab, max_length=config["data"]["max_length"]
-    )
+    if model_type == "hierarchical":
+        context_size = config["data"].get("context_size", 5)
+        dataset = ContextWindowDataset(
+            data_raw, vocab,
+            max_length=config["data"]["max_length"],
+            context_size=context_size,
+        )
+    else:
+        dataset = GaslightingDataset(
+            data_raw, vocab, max_length=config["data"]["max_length"]
+        )
 
    
     # ensure label mapping matches training
@@ -53,16 +65,31 @@ def evaluate_model(checkpoint_path, split="test"):
     # build model
     
     num_classes = len(dataset.label2idx)
-    model = TransformerGaslightingDetector(
-        vocab_size=len(vocab),
-        embedding_dim=config["model"]["embedding_dim"],
-        num_heads=config["model"]["num_heads"],
-        num_layers=config["model"]["num_layers"],
-        dim_feedforward=config["model"]["dim_feedforward"],
-        num_classes=num_classes,
-        dropout=config["model"]["dropout"],
-        max_length=config["data"]["max_length"],
-    )
+    if model_type == "hierarchical":
+        max_utts = config["data"].get("context_size", 5) + 1
+        model = HierarchicalGaslightingDetector(
+            vocab_size=len(vocab),
+            embedding_dim=config["model"]["embedding_dim"],
+            num_heads=config["model"]["num_heads"],
+            num_utterance_layers=config["model"].get("utterance_layers", 1),
+            num_conversation_layers=config["model"].get("conversation_layers", 1),
+            dim_feedforward=config["model"]["dim_feedforward"],
+            num_classes=num_classes,
+            dropout=config["model"]["dropout"],
+            max_length=config["data"]["max_length"],
+            max_utterances=max_utts,
+        )
+    else:
+        model = TransformerGaslightingDetector(
+            vocab_size=len(vocab),
+            embedding_dim=config["model"]["embedding_dim"],
+            num_heads=config["model"]["num_heads"],
+            num_layers=config["model"]["num_layers"],
+            dim_feedforward=config["model"]["dim_feedforward"],
+            num_classes=num_classes,
+            dropout=config["model"]["dropout"],
+            max_length=config["data"]["max_length"],
+        )
 
     model.load_state_dict(checkpoint["model_state_dict"])
     model.to(device)
