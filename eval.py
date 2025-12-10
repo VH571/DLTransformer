@@ -97,6 +97,8 @@ def evaluate_model(checkpoint_path, split="test"):
 
     # Evaluation loop
     all_preds, all_labels = [], []
+    misclassified_examples = [] 
+    max_to_store = 15
 
     print(f"Evaluating on split: {split}")
     with torch.no_grad():
@@ -109,6 +111,38 @@ def evaluate_model(checkpoint_path, split="test"):
 
             all_preds.extend(preds)
             all_labels.extend(labels.numpy())
+            # collect misclassified examples
+            if len(misclassified_examples) < max_to_store:
+                labels_np = labels.numpy()
+                has_context = "target_text" in batch
+
+                for i in range(len(labels_np)):
+                    if len(misclassified_examples) >= max_to_store:
+                        break
+                    y_true = int(labels_np[i])
+                    y_pred = int(preds[i])
+                    if y_true == y_pred:
+                        continue
+
+                    if has_context:
+                        target_text = batch["target_text"][i]
+                        context_texts = batch["context_texts"][i]
+                        example = {
+                            "true_label": dataset.idx2label[y_true],
+                            "pred_label": dataset.idx2label[y_pred],
+                            "target_text": target_text,
+                            "context_texts": context_texts,
+                        }
+                    else:
+                        text = batch["text"][i]
+                        example = {
+                            "true_label": dataset.idx2label[y_true],
+                            "pred_label": dataset.idx2label[y_pred],
+                            "text": text,
+                        }
+
+                    misclassified_examples.append(example)
+
 
     all_preds = np.array(all_preds)
     all_labels = np.array(all_labels)
@@ -122,6 +156,20 @@ def evaluate_model(checkpoint_path, split="test"):
     print("\nClassification report:")
     print_classification_report(all_preds, all_labels, label_names)
     
+    print("\nSome misclassified examples:")
+    for i, ex in enumerate(misclassified_examples):
+        print("-" * 80)
+        print(f"Example {i+1}")
+        print(f"True label: {ex['true_label']}")
+        print(f"Predicted:  {ex['pred_label']}")
+        if "text" in ex:
+            print(f"Text: {ex['text']}")
+        else:
+            print("Context:")
+            print(ex["context_texts"])
+            print(f"Target: {ex['target_text']}")
+
+
     
     cm = get_confusion_matrix(all_preds, all_labels)
     print("\nConfusion matrix:")

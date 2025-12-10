@@ -39,7 +39,12 @@ class GaslightingDataset(Dataset):
         return {
             "input_ids": torch.tensor(ids, dtype=torch.long),
             "label": torch.tensor(label, dtype=torch.long),
-        }
+            "text": str(text),
+            "category": str(item.get("category", "")),
+            "id": str(item.get("id", "")),
+            "turn": str(item.get("turn", "")),
+            "speaker_role": str(item.get("speaker_role", "")),
+}
 
 
 #dataset for hierarchical model with the context 
@@ -114,10 +119,23 @@ class ContextWindowDataset(Dataset):
             encoded = encoded[-max_utts:]
 
         input_ids = torch.tensor(encoded, dtype=torch.long)
-        label = self.label2idx[conv[pos]["category"]]
+
+        target_item = conv[pos]
+        label = self.label2idx[target_item["category"]]
+
+        # human readable context texts
+        target_text = self._build_text(target_item)
+        context_items = conv[start:pos]
+        context_texts = [self._build_text(it) for it in context_items]
 
         return {
             "input_ids": input_ids,
             "label": torch.tensor(label, dtype=torch.long),
-        }
-        
+            "target_text": str(target_text),
+            "context_texts": "\n".join([str(t) for t in context_texts]),
+            "category": str(target_item.get("category", "")),
+            "id": str(target_item.get("id", "")),
+            "turn": str(target_item.get("turn", "")),
+            "speaker_role": str(target_item.get("speaker_role", "")),
+            }
+
