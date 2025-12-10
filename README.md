@@ -1,4 +1,4 @@
-# Gaslighting Detection - Baseline (Stage 3)
+# Gaslighting Detection - Hierarchical (Stage 3)
 
 ## Dataset
 
