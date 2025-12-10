@@ -1,4 +1,4 @@
-# Gaslighting Detection - Baseline (Stage 2)
+# Gaslighting Detection - Baseline (Stage 3)
 
 ## Dataset
 
@@ -25,14 +25,17 @@ pip install -r requirements.txt
 
 ```bash
 python train.py --config configs/baseline.yaml
+python train.py --config configs/hierarchical.yaml
+
 ```
 
-This saves your trained model to `checkpoints/baseline.pt`
-
+This saves your trained model to `checkpoints/baseline.pt` and `checkpoints_hier/baseline.pt`
 ### Step 4
 
 ```bash
 python eval.py --checkpoint checkpoints/baseline.pt --split test
+python eval.py --checkpoint checkpoints_hier/baseline.pt --split test
+
 ```
 
-This shows accuracy, F1 scores, and a confusion matrix.
+This shows accuracy, F1 scores, and a confusion matrix, as well as some examples that it missed.
