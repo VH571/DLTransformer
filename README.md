@@ -1,5 +1,5 @@
 # Gaslighting Detection - Hierarchical (Stage 3)
-
+https://docs.google.com/document/d/1YDm2TRu_yaHjJgjmolJ9-6BY5fhK4psxarVY3L4UZag/edit?tab=t.0#heading=h.abimqxg626au
 ## Dataset
 
 This project uses the **GaslightingLLM** dataset from HuggingFace: `Maxwe11y/gaslighting`
